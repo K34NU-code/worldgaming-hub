@@ -1,0 +1,40 @@
+# =====================================================================
+# WorldGaming Hub – Discord-Ankündigung bei jedem neuen Release
+#
+# Liegt auf GitHub unter:  .github/workflows/discord-ankuendigung.yml
+# Läuft automatisch, sobald du auf GitHub ein Release veröffentlichst.
+# Die Stichpunkte aus der Release-Beschreibung landen in der Nachricht.
+#
+# Braucht EIN Geheimnis im Repository (Settings → Secrets and variables
+# → Actions → New repository secret):
+#   Name:  DISCORD_WEBHOOK
+#   Wert:  die Webhook-Adresse aus deinem Discord-Kanal
+# =====================================================================
+
+name: Discord-Ankündigung
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  ankuendigen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Nachricht an Discord schicken
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          VERSION: ${{ github.event.release.tag_name }}
+          NOTES: ${{ github.event.release.body }}
+        run: |
+          VERSION="${VERSION#v}"
+          jq -n --arg v "$VERSION" --arg notes "$NOTES" '{
+            username: "WorldGaming Hub",
+            embeds: [{
+              title: ("🦇 WorldGaming Hub " + $v + " ist da!"),
+              description: ((($notes | if . == "" then "Neue Version mit Verbesserungen." else . end) | .[0:3500])
+                + "\n\n🔄 Das Update kommt automatisch – einfach den Hub neu starten."),
+              color: 2282478
+            }]
+          }' > nachricht.json
+          curl -sS -f -H "Content-Type: application/json" -d @nachricht.json "$WEBHOOK"
