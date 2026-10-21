@@ -3,7 +3,8 @@
 #
 # Liegt auf GitHub unter:  .github/workflows/discord-ankuendigung.yml
 # Läuft automatisch, sobald du auf GitHub ein Release veröffentlichst.
-# Die Stichpunkte aus der Release-Beschreibung landen in der Nachricht.
+# Die Release-Beschreibung landet in der Nachricht. Bilder, die du in die
+# Beschreibung ziehst, erscheinen in Discord als Bilder (bis zu 4).
 #
 # Braucht EIN Geheimnis im Repository (Settings → Secrets and variables
 # → Actions → New repository secret):
@@ -26,15 +27,26 @@ jobs:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           VERSION: ${{ github.event.release.tag_name }}
           NOTES: ${{ github.event.release.body }}
+          LINK: ${{ github.event.release.html_url }}
         run: |
           VERSION="${VERSION#v}"
-          jq -n --arg v "$VERSION" --arg notes "$NOTES" '{
-            username: "WorldGaming Hub",
-            embeds: [{
-              title: ("🦇 WorldGaming Hub " + $v + " ist da!"),
-              description: ((($notes | if . == "" then "Neue Version mit Verbesserungen." else . end) | .[0:3500])
-                + "\n\n🔄 Das Update kommt automatisch – einfach den Hub neu starten."),
-              color: 2282478
-            }]
-          }' > nachricht.json
+          cat > nachricht.jq <<'JQ'
+          ($notes | gsub("\r"; "")) as $n
+          | ([ ($n | scan("!\\[[^\\]]*\\]\\((https?://[^)\\s]+)[^)]*\\)")), ($n | scan("<img[^>]*src=\"(https?://[^\"]+)\"")) ] | map(.[0]) | .[0:4]) as $imgs
+          | ($n | gsub("!\\[[^\\]]*\\]\\([^)]*\\)"; "") | gsub("<img[^>]*>"; "") | gsub("\n[ \t]*\n([ \t]*\n)+"; "\n\n") | sub("^\\s+"; "") | sub("\\s+$"; "")) as $text
+          | {
+              username: "WorldGaming Hub",
+              embeds: (
+                [{
+                  title: ("🦇 WorldGaming Hub " + $v + " ist da!"),
+                  url: $link,
+                  description: ((($text | if . == "" then "Neue Version mit Verbesserungen." else . end) | .[0:3500])
+                    + "\n\n🔄 Das Update kommt automatisch – einfach den Hub neu starten."),
+                  color: 2282478
+                } + (if ($imgs | length) > 0 then { image: { url: $imgs[0] } } else {} end)]
+                + [ $imgs[1:][] | { url: $link, image: { url: . } } ]
+              )
+            }
+          JQ
+          jq -n --arg v "$VERSION" --arg notes "$NOTES" --arg link "$LINK" -f nachricht.jq > nachricht.json
           curl -sS -f -H "Content-Type: application/json" -d @nachricht.json "$WEBHOOK"
