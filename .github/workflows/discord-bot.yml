@@ -1,0 +1,47 @@
+# =====================================================================
+# WorldGaming Hub 2.0 – Discord-Bot (Squad-Turnier, Shop, Saison, Highlights)
+#
+# Auf GitHub hochladen (zwei Dateien):
+#   1. diese Datei nach      .github/workflows/discord-bot.yml
+#   2. discord-bot.js nach    discord-bot.js   (ganz oben im Repository)
+#      – das ist der fertig gepackte Bot (Turnier-Rechnung, Shop, Saisons).
+#        Nach Updates, die Shop oder Saisons ändern, bekommst du eine neue.
+# Läuft jede Nacht kurz nach 0:00 Uhr deutscher Zeit (zwei Zeiten wegen
+# Sommer-/Winterzeit – das Skript postet nur, wenn es in Deutschland 0 Uhr ist).
+# Von Hand starten: GitHub → Actions → "Discord-Bot" → "Run workflow".
+#
+# Braucht drei Geheimnisse (Settings → Secrets and variables → Actions):
+#   DISCORD_WEBHOOK  – gibt es schon (von der Update-Ankündigung)
+#   SUPABASE_URL     – https://xxxxxxxx.supabase.co  (wie in scoreboard.json)
+#   SUPABASE_KEY     – der öffentliche Schlüssel sb_publishable_…  (wie in scoreboard.json)
+# =====================================================================
+
+name: Discord-Bot
+
+on:
+  schedule:
+    - cron: '5 22 * * *'   # 0:05 Uhr Sommerzeit
+    - cron: '5 23 * * *'   # 0:05 Uhr Winterzeit
+  workflow_dispatch:
+    inputs:
+      alles:
+        description: 'Alle Posts sofort schicken (zum Testen)'
+        type: boolean
+        default: false
+
+jobs:
+  posten:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Posten
+        env:
+          TZ: Europe/Berlin
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FORCE: ${{ github.event.inputs.alles == 'true' && 'alles' || '' }}
+        run: node discord-bot.js
